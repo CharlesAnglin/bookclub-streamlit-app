@@ -160,7 +160,10 @@ def print_dataframe_as_slope_graph(dataframe):
 def interations_dropdown(include_all_years=True):
     # Create iteration options based on the secret
     num_iterations = len(st.secrets["iteration"])
-    individual_iteration_options = [f"Iteration {i+1} ({st.secrets['iteration'][f"{i}"]['year']})" for i in range(num_iterations)]
+    individual_iteration_options = []
+    for i in range(num_iterations):
+        year = st.secrets["iteration"][str(i)]["year"]
+        individual_iteration_options.append(f"Iteration {i+1} ({year})")
 
     if include_all_years:
         iteration_options = ["All years"] + individual_iteration_options
