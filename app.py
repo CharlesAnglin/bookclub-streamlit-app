@@ -2,6 +2,22 @@ import streamlit as st
 import requests
 import pandas as pd
 import io
+import seaborn as sns
+
+# Make the dataframe take up the full width with wider layout
+st.set_page_config(layout="wide")
+
+# Add CSS to center content
+st.markdown("""
+<style>
+.main .block-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+</style>
+""", unsafe_allow_html=True)
 
 def get_google_sheets_data(sheet_num=0):
     """Fetch data from Google Sheets and return as bytes."""
@@ -27,9 +43,8 @@ def get_local_data():
 query_params = st.experimental_get_query_params()
 token = query_params.get("token", [None])[0]
 
-# Compare to secret
 if token == st.secrets["token"]:
-
+        
     data = get_google_sheets_data(2)
     # data = get_local_data()
     
@@ -37,40 +52,32 @@ if token == st.secrets["token"]:
     try:
         df = pd.read_csv(io.StringIO(data.decode('utf-8')))
         
+        # # Remove the last column
+        df = df.iloc[:, :-1]
+        
         # Format numeric columns to max 2 decimal places, strip trailing zeros
         for col in df.columns:
             if pd.api.types.is_numeric_dtype(df[col]):
                 df[col] = df[col].round(2)
-                # Convert to string to remove trailing zeros, then back to numeric
-                df[col] = df[col].apply(lambda x: f"{x:g}" if pd.notna(x) else x)
         
         st.subheader("Data from Google Sheets:")
         # Apply different color styling to different columns
         styled_df = df.style
         
-        # Apply styling based on column positions
-        if len(df.columns) > 9:  # Ensure we have enough columns
-            # Columns 0-2: No style (first three columns)
-            # Columns 3-8: Red to Green style
-            styled_df = styled_df.background_gradient(cmap='RdYlGn', subset=df.columns[3:9], low=0.2, high=0.2)
-            # Penultimate column (second to last): Red to Green style
-            styled_df = styled_df.background_gradient(cmap='RdYlGn', subset=[df.columns[-2]], low=0.2, high=0.2)
-            # Last column: Red to Green style
-            styled_df = styled_df.background_gradient(cmap='RdYlGn', subset=[df.columns[-1]], low=0.2, high=0.2)
+        # Apply display formatting to numeric columns (keeps underlying data as numbers)
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        if len(numeric_cols) > 0:
+            styled_df = styled_df.format({col: lambda x: f"{x:g}" if pd.notna(x) else "" for col in numeric_cols})
+        
+        cm = sns.light_palette("green", as_cmap=True)
+        # Can't get this to look pretty but the below allows more control:
+        # cm = sns.diverging_palette(121, 10, l=77, s=30, as_cmap=True)
+        styled_df = styled_df.background_gradient(cmap=cm, subset=df.columns[3:], high=0.4)
 
-        else:
-            # If fewer columns, apply default styling to all
-            styled_df = styled_df.background_gradient(cmap='RdYlGn', low=0.2, high=0.2)
-        
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
-        
-        st.subheader("Basic Chart:")
-        # Create a simple line chart
-        st.line_chart(df.set_index(df.columns[0]))
-        
-        st.subheader("Bar Chart:")
-        # Create a bar chart
-        st.bar_chart(df.set_index(df.columns[0]))
+        st.dataframe(styled_df, 
+                    use_container_width=True,
+                    hide_index=True,
+                    height=460)  # Set explicit height in pixels so that 12 rows can fit in
         
     except Exception as e:
         st.error(f"Error parsing data: {e}")
