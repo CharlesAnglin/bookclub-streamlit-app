@@ -189,7 +189,7 @@ if token == st.secrets["token"]:
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        st.image("Bookclub_logo.png", width=250)
+        st.image("bookclub_logo.png", width=250)
     
     with col2:
         st.title("Book Club Dashboard")
