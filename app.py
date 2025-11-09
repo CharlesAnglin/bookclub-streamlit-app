@@ -236,7 +236,7 @@ if token == st.secrets["token"]:
         selected_iteration, iteration_options = interations_dropdown(False)
 
         selected_index = iteration_options.index(selected_iteration)
-        sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["reranking_sheet_id"]
+        sheet_id = st.secrets["iteration"][f"{selected_index}"]["reranking_sheet_id"]
         data = get_google_sheets_data(sheet_id)
 
         # Keep only specific columns (adjust column names as needed)
