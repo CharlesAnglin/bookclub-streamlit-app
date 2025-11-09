@@ -173,7 +173,7 @@ def interations_dropdown(include_all_years=True):
     selected_iteration = st.selectbox(
         "Bookclub iteration:",
         options=iteration_options,
-        index=1  # select first iteration by default
+        index=len(iteration_options) - 1  # default to the most recent iteration
     )
 
     return selected_iteration, iteration_options 
@@ -206,8 +206,6 @@ if token == st.secrets["token"]:
         horizontal=True
     )
 
-    st.markdown("---")
-
     # Show iteration dropdown only when "Scores" is selected
     if view_option == "Scores":
 
@@ -229,6 +227,8 @@ if token == st.secrets["token"]:
             sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["scoring_sheet_id"]
             data = get_google_sheets_data(sheet_id)
 
+        st.markdown("---")
+
         style_and_print_dataframe_as_table(data)
 
     if view_option == "Reranking":
@@ -243,6 +243,8 @@ if token == st.secrets["token"]:
         columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
         df = data[columns_to_keep]
         
+        st.markdown("---")
+
         print_dataframe_as_slope_graph(df)
 
 else:
