@@ -159,6 +159,89 @@ def print_dataframe_as_slope_graph(dataframe):
     
     st.pyplot(plt)
 
+def create_facet_grid_with_stats(dataframe):
+    """Create a seaborn ridge plot from the dataframe after removing first 4 columns."""    
+    # Remove first 4 columns
+    df_analysis = dataframe.iloc[:, 4:].copy()
+    
+    # Melt the dataframe to create long format for FacetGrid
+    df_melted = pd.melt(df_analysis.reset_index(), 
+                       id_vars=['index'], 
+                       value_vars=df_analysis.columns,
+                       var_name='Member', 
+                       value_name='Score')
+    
+    # Remove rows with NaN scores
+    df_melted = df_melted.dropna(subset=['Score'])
+    
+    if df_melted.empty:
+        st.info("📊 No valid scores found for analysis.")
+        return
+    
+    # Set the style for ridge plot
+    sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
+    
+    # Create a color palette
+    n_categories = len(df_melted['Member'].unique())
+    pal = sns.cubehelix_palette(n_categories, rot=-.25, light=.7)
+    
+    # Initialize the FacetGrid object with exaggerated ridge size
+    g = sns.FacetGrid(df_melted, row="Member", hue="Member", 
+                      aspect=8, height=1, palette=pal)
+    
+    # Draw the densities in a few steps
+    g.map(sns.kdeplot, "Score",
+          bw_adjust=.5, clip_on=False,
+          fill=True, alpha=1, linewidth=1.5, clip=(0, 10))
+    g.map(sns.kdeplot, "Score", clip_on=False, color="w", lw=2, bw_adjust=.5, clip=(0, 10))
+    
+    # Add a horizontal reference line
+    g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+    
+    # Define function to label the plot
+    def label(x, color, label):
+        ax = plt.gca()
+        ax.text(0, .2, label, fontweight="bold", color=color,
+                ha="left", va="center", transform=ax.transAxes)
+    
+    g.map(label, "Score")
+    
+    # Remove axes details that don't play well with overlap
+    g.set_titles("")
+    g.set(yticks=[], ylabel="", xlim=(-1.5, 10.0))
+    g.despine(bottom=True, left=True)
+    
+    # Add a title and axis label
+    g.figure.suptitle('Score Distribution Ridge Plot', y=1.02, fontsize=16, fontweight='bold')
+    g.set_axis_labels("Score", "")
+    
+    plt.tight_layout()
+    st.pyplot(plt)
+    
+    # Reset seaborn theme to default after plotting
+    sns.reset_defaults()
+    
+    # Also show a summary table
+    st.subheader("Scores Stats Per Member")
+    
+    # Preserve the original column order from the dataframe (after removing first 4 columns)
+    original_member_order = dataframe.columns[4:].tolist()
+    
+    # Create summary stats with preserved order
+    summary_stats = df_melted.groupby('Member')['Score'].agg(['mean', 'std', 'min', 'max']).round(2)
+    
+    # Reindex to match the original column order
+    summary_stats = summary_stats.reindex(original_member_order)
+    
+    # Apply styling similar to the Raw Scores dataframe
+    cm = sns.light_palette("green", as_cmap=True)
+    styled_summary = summary_stats.style.background_gradient(cmap=cm, high=0.4)
+    
+    # Format to 2 decimal places like the Raw Scores table
+    styled_summary = styled_summary.format("{:.2f}")
+    
+    st.dataframe(styled_summary, use_container_width=True)
+
 def interations_dropdown(include_all_years=True):
     # Create iteration options based on the secret
     num_iterations = len(st.secrets["iteration"])
@@ -195,21 +278,20 @@ if token == st.secrets["token"]:
 
     with col2:
         st.title("Book Club Dashboard")
-        st.write("Welcome to the Book Club Dashboard! Here you can explore scores, reranking, and personal stats from our book club iterations.")
+        st.write("Welcome to the Book Club Dashboard! Here you can explore the raw scores, score analysis and book rerankings from our book club iterations.")
     
     st.markdown("---")
 
     # Add three mutually exclusive buttons
     view_option = st.radio(
         "Select view:",
-        # TODO: Add "Personal stats" functionality
-        options=["Scores", "Reranking"],
+        options=["Raw Scores", "Score Analysis", "Reranking"],
         index=0,  # "Scores" selected by default
         horizontal=True
     )
 
     # Show iteration dropdown only when "Scores" is selected
-    if view_option == "Scores":
+    if view_option == "Raw Scores":
 
         selected_iteration, iteration_options = interations_dropdown()
 
@@ -251,6 +333,33 @@ if token == st.secrets["token"]:
             columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
             df = data[columns_to_keep]
             print_dataframe_as_slope_graph(df)
+
+    if view_option == "Score Analysis":
+
+        selected_iteration, iteration_options = interations_dropdown()
+
+        if selected_iteration == "All years":
+            # Fetch data from all iterations and combine them using pandas
+            all_dataframes = []
+            for i in range(len(st.secrets["iteration"])):
+                sheet_id = st.secrets["iteration"][f"{i}"]["scoring_sheet_id"]
+                df_temp = get_google_sheets_data(sheet_id)
+                if not df_temp.empty:  # Only add non-empty dataframes
+                    all_dataframes.append(df_temp)
+            
+            # Combine all dataframes into one
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            data = combined_df
+        else:
+            selected_index = iteration_options.index(selected_iteration)
+            sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["scoring_sheet_id"]
+            data = get_google_sheets_data(sheet_id)
+
+        st.markdown("---")
+        st.subheader("Score Distribution Analysis")
+        st.write("This analysis shows the distribution of scores across different members.")
+
+        create_facet_grid_with_stats(data)
 
 else:
     st.error("🚫 Access denied.")
