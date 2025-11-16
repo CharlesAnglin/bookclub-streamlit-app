@@ -5,6 +5,8 @@ import io
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+#TODO: interation 2 reranking data
+
 # Make the dataframe take up the full width with wider layout
 st.set_page_config(layout="wide")
 
@@ -20,23 +22,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# TODO: add caching?
+@st.cache_data(ttl=300, show_spinner=False)
 def get_google_sheets_data(sheet_id=0):
     """Fetch data from Google Sheets and return as DataFrame."""
-    url = st.secrets["google_drive"]["link"]
+    try:
+        url = st.secrets["google_drive"]["link"]
 
-    # Convert Google Sheets URL to CSV export format
-    csv_url = url.replace('/edit?usp=sharing', '/export?format=csv')
-    csv_url += f"&gid={sheet_id}"
+        # Convert Google Sheets URL to CSV export format
+        csv_url = url.replace('/edit?usp=sharing', '/export?format=csv')
+        csv_url += f"&gid={sheet_id}"
+        
+        return pd.read_csv(csv_url)
     
-    return pd.read_csv(csv_url)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()  # Return empty DataFrame
 
 def style_and_print_dataframe_as_table(dataframe):
     try:
         df = dataframe
-        
-        # # Remove the last column
-        df = df.iloc[:, :-1]
         
         # Format numeric columns to max 2 decimal places, strip trailing zeros
         for col in df.columns:
@@ -56,8 +59,7 @@ def style_and_print_dataframe_as_table(dataframe):
         # cm = sns.diverging_palette(121, 10, l=77, s=30, as_cmap=True)
         styled_df = styled_df.background_gradient(cmap=cm, subset=df.columns[3:], high=0.4)
 
-        st.dataframe(styled_df, 
-                    use_container_width=True,
+        st.dataframe(styled_df,
                     hide_index=True,
                     height=460)  # Set explicit height in pixels so that 12 rows can fit in
         
@@ -179,8 +181,8 @@ def interations_dropdown(include_all_years=True):
     return selected_iteration, iteration_options 
 
 # Retrieve query parameter (?token=...)
-query_params = st.experimental_get_query_params()
-token = query_params.get("token", [None])[0]
+query_params = st.query_params
+token = query_params.get("token", None)
 
 # Only show content if token matches secret
 if token == st.secrets["token"]:
@@ -189,8 +191,8 @@ if token == st.secrets["token"]:
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        st.image("bookclub_logo.png", width=250)
-    
+        st.image("bookclub_logo_white.png", width=250)
+
     with col2:
         st.title("Book Club Dashboard")
         st.write("Welcome to the Book Club Dashboard! Here you can explore scores, reranking, and personal stats from our book club iterations.")
@@ -239,13 +241,16 @@ if token == st.secrets["token"]:
         sheet_id = st.secrets["iteration"][f"{selected_index}"]["reranking_sheet_id"]
         data = get_google_sheets_data(sheet_id)
 
-        # Keep only specific columns (adjust column names as needed)
-        columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
-        df = data[columns_to_keep]
-        
         st.markdown("---")
 
-        print_dataframe_as_slope_graph(df)
+        # Check if dataframe is empty before creating slope graph
+        if data.empty:
+            st.info("No reranking data available for the selected iteration.")
+        else:
+            # Keep only specific columns (adjust column names as needed)
+            columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
+            df = data[columns_to_keep]
+            print_dataframe_as_slope_graph(df)
 
 else:
     st.error("🚫 Access denied.")
