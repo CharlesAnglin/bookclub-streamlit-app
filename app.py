@@ -25,7 +25,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# @st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_google_sheets_data(sheet_id=0):
     """Fetch data from Google Sheets and return as DataFrame."""
     try:
