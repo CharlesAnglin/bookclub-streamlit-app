@@ -6,6 +6,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 #TODO: interation 2 reranking data
+#TODO: standard deviation per book (which ones were most divisive)
+#TODO: score vs publication year
+#TODO: genres analysis
 
 # Make the dataframe take up the full width with wider layout
 st.set_page_config(layout="wide")
@@ -22,7 +25,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=300, show_spinner=False)
+# @st.cache_data(ttl=300, show_spinner=False)
 def get_google_sheets_data(sheet_id=0):
     """Fetch data from Google Sheets and return as DataFrame."""
     try:
@@ -261,6 +264,58 @@ def create_styled_summary_table(dataframe):
     
     st.dataframe(styled_summary)
 
+def create_page_count_vs_score_scatter(dataframe):
+    """Create a scatter plot of page count vs book score with book annotations."""
+    # Check if required columns exist
+    required_cols = ['Page Count', 'Average Score', 'Book']
+    missing_cols = [col for col in required_cols if col not in dataframe.columns]
+    
+    if missing_cols:
+        st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+        st.info(f"Available columns: {', '.join(dataframe.columns)}")
+        return
+    
+    # Remove rows with missing data in required columns
+    plot_data = dataframe[required_cols].dropna()
+    
+    if plot_data.empty:
+        st.info("📊 No valid data found for scatter plot.")
+        return
+    
+    # Create the scatter plot
+    plt.figure(figsize=(12, 8))
+    
+    # Plot points
+    plt.scatter(plot_data['Page Count'], plot_data['Average Score'], 
+               alpha=0.7, s=80, c='steelblue', edgecolors='darkblue', linewidth=1)
+    
+    # Add book titles as annotations
+    for i, row in plot_data.iterrows():
+        book_title = row['Book']
+        # Truncate long titles for readability
+        if len(book_title) > 25:
+            book_title = book_title[:22] + "..."
+        
+        plt.annotate(book_title, 
+                    (row['Page Count'], row['Average Score']),
+                    xytext=(8, 8), textcoords='offset points',
+                    fontsize=9, alpha=0.8,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', 
+                             alpha=0.7, edgecolor='gray'),
+                    ha='left')
+    
+    # Customize the plot
+    plt.xlabel('Page Count', fontsize=12, fontweight='bold')
+    plt.ylabel('Average Score', fontsize=12, fontweight='bold')
+    plt.title('Book Score vs Page Count', fontsize=14, fontweight='bold', pad=20)
+    plt.grid(True, alpha=0.3)
+    
+    # Add some padding to prevent labels from being cut off
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.95, top=0.9)
+    
+    st.pyplot(plt)
+
 def interations_dropdown(include_all_years=True, default_to_most_recent=True):
     # Create iteration options based on the secret
     num_iterations = len(st.secrets["iteration"])
@@ -308,7 +363,7 @@ if token == st.secrets["token"]:
     # Add three mutually exclusive buttons
     view_option = st.radio(
         "Select view:",
-        options=["Score Table", "Score Distribution", "Reranking"],
+        options=["Score Table", "Score Distribution", "Reranking", "Page Length"],
         index=0,  # "Scores" selected by default
         horizontal=True
     )
@@ -339,11 +394,13 @@ if token == st.secrets["token"]:
         st.subheader("Score Table")
         st.write("Click on the table headers to sort. Tap the fullscreen icon in the top right to expand table. If viewing on a smartphone it may help to turn your phone to landscape mode.")
 
-        style_and_print_dataframe_as_table(data)
+        only_score_data = data.drop(columns=['Page Count'], errors='ignore')
+
+        style_and_print_dataframe_as_table(only_score_data)
 
         # Also show a summary table
         st.subheader("Scores Stats Per Member")
-        create_styled_summary_table(data)
+        create_styled_summary_table(only_score_data)
 
     if view_option == "Score Distribution":
 
@@ -371,7 +428,9 @@ if token == st.secrets["token"]:
         st.subheader("Score Distribution")
         st.write("This graph shows the distribution of scores across different bookclub members.")
 
-        create_facet_grid_with_stats(data)
+        only_score_data = data.drop(columns=['Page Count'], errors='ignore')
+
+        create_facet_grid_with_stats(only_score_data)
 
     if view_option == "Reranking":
 
@@ -394,6 +453,33 @@ if token == st.secrets["token"]:
             columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
             df = data[columns_to_keep]
             print_dataframe_as_slope_graph(df)
+    
+    if view_option == "Page Length":
+        
+        selected_iteration, iteration_options = interations_dropdown(default_to_most_recent=False)
+
+        if selected_iteration == "All years":
+            # Fetch data from all iterations and combine them using pandas
+            all_dataframes = []
+            for i in range(len(st.secrets["iteration"])):
+                sheet_id = st.secrets["iteration"][f"{i}"]["scoring_sheet_id"]
+                df_temp = get_google_sheets_data(sheet_id)
+                all_dataframes.append(df_temp)
+            
+            # Combine all dataframes into one
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            data = combined_df
+        else:
+            selected_index = iteration_options.index(selected_iteration)
+            sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["scoring_sheet_id"]
+            data = get_google_sheets_data(sheet_id)
+
+        st.markdown("---")
+
+        st.subheader("Page count vs Book Score")
+        st.write("This scatter plot shows the relationship between the page count of books and their average score. Each point represents a book, annotated with its title.")
+
+        create_page_count_vs_score_scatter(data)
 
 else:
     st.error("🚫 Access denied.")
