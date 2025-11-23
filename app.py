@@ -152,7 +152,7 @@ def print_dataframe_as_slope_graph(dataframe):
                 alpha=0.8)
 
     plt.xticks([1, 2], ['Original', 'Reranked'])
-    plt.title('Book Ranking Changes')
+    plt.title('Book Reranking')
     plt.yticks([]) # Remove y-axis
     plt.box(False) # Remove the bounding box around plot
     plt.grid(True, alpha=0.3)
@@ -220,15 +220,34 @@ def create_facet_grid_with_stats(dataframe):
     
     # Reset seaborn theme to default after plotting
     sns.reset_defaults()
+
+def create_styled_summary_table(dataframe):
+    """Create a styled summary statistics table for member scores."""
+    # Remove first 4 columns
+    df_analysis = dataframe.iloc[:, 4:].copy()
     
-    # Also show a summary table
-    st.subheader("Scores Stats Per Member")
+    # Melt the dataframe to create long format
+    df_melted = pd.melt(df_analysis.reset_index(), 
+                       id_vars=['index'], 
+                       value_vars=df_analysis.columns,
+                       var_name='Member', 
+                       value_name='Score')
+    
+    # Remove rows with NaN scores
+    df_melted = df_melted.dropna(subset=['Score'])
+    
+    if df_melted.empty:
+        st.info("📊 No valid scores found for summary table.")
+        return
     
     # Preserve the original column order from the dataframe (after removing first 4 columns)
     original_member_order = dataframe.columns[4:].tolist()
     
     # Create summary stats with preserved order
     summary_stats = df_melted.groupby('Member')['Score'].agg(['mean', 'std', 'min', 'max']).round(2)
+    
+    # Rename columns to more descriptive names
+    summary_stats.columns = ['Mean score', 'Score deviation', 'Lowest awarded score', 'Highest awarded score']
     
     # Reindex to match the original column order
     summary_stats = summary_stats.reindex(original_member_order)
@@ -240,9 +259,9 @@ def create_facet_grid_with_stats(dataframe):
     # Format to 2 decimal places like the Raw Scores table
     styled_summary = styled_summary.format("{:.2f}")
     
-    st.dataframe(styled_summary, use_container_width=True)
+    st.dataframe(styled_summary)
 
-def interations_dropdown(include_all_years=True):
+def interations_dropdown(include_all_years=True, default_to_most_recent=True):
     # Create iteration options based on the secret
     num_iterations = len(st.secrets["iteration"])
     individual_iteration_options = []
@@ -255,10 +274,15 @@ def interations_dropdown(include_all_years=True):
     else:
         iteration_options = individual_iteration_options
 
+    if default_to_most_recent:
+        selected_iteration = len(iteration_options) - 1 # default to the most recent iteration
+    else:
+        selected_iteration = 0
+
     selected_iteration = st.selectbox(
         "Bookclub iteration:",
         options=iteration_options,
-        index=len(iteration_options) - 1  # default to the most recent iteration
+        index=selected_iteration
     )
 
     return selected_iteration, iteration_options 
@@ -278,20 +302,19 @@ if token == st.secrets["token"]:
 
     with col2:
         st.title("Book Club Dashboard")
-        st.write("Welcome to the Book Club Dashboard! Here you can explore the raw scores, score analysis and book rerankings from our book club iterations.")
-    
+        
     st.markdown("---")
 
     # Add three mutually exclusive buttons
     view_option = st.radio(
         "Select view:",
-        options=["Raw Scores", "Score Analysis", "Reranking"],
+        options=["Score Table", "Score Distribution", "Reranking"],
         index=0,  # "Scores" selected by default
         horizontal=True
     )
 
     # Show iteration dropdown only when "Scores" is selected
-    if view_option == "Raw Scores":
+    if view_option == "Score Table":
 
         selected_iteration, iteration_options = interations_dropdown()
 
@@ -313,30 +336,18 @@ if token == st.secrets["token"]:
 
         st.markdown("---")
 
+        st.subheader("Score Table")
+        st.write("Click on the table headers to sort. Tap the fullscreen icon in the top right to expand table. If viewing on a smartphone it may help to turn your phone to landscape mode.")
+
         style_and_print_dataframe_as_table(data)
 
-    if view_option == "Reranking":
+        # Also show a summary table
+        st.subheader("Scores Stats Per Member")
+        create_styled_summary_table(data)
 
-        selected_iteration, iteration_options = interations_dropdown(False)
+    if view_option == "Score Distribution":
 
-        selected_index = iteration_options.index(selected_iteration)
-        sheet_id = st.secrets["iteration"][f"{selected_index}"]["reranking_sheet_id"]
-        data = get_google_sheets_data(sheet_id)
-
-        st.markdown("---")
-
-        # Check if dataframe is empty before creating slope graph
-        if data.empty:
-            st.info("No reranking data available for the selected iteration.")
-        else:
-            # Keep only specific columns (adjust column names as needed)
-            columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
-            df = data[columns_to_keep]
-            print_dataframe_as_slope_graph(df)
-
-    if view_option == "Score Analysis":
-
-        selected_iteration, iteration_options = interations_dropdown()
+        selected_iteration, iteration_options = interations_dropdown(default_to_most_recent=False)
 
         if selected_iteration == "All years":
             # Fetch data from all iterations and combine them using pandas
@@ -356,10 +367,33 @@ if token == st.secrets["token"]:
             data = get_google_sheets_data(sheet_id)
 
         st.markdown("---")
-        st.subheader("Score Distribution Analysis")
-        st.write("This analysis shows the distribution of scores across different members.")
+
+        st.subheader("Score Distribution")
+        st.write("This graph shows the distribution of scores across different bookclub members.")
 
         create_facet_grid_with_stats(data)
+
+    if view_option == "Reranking":
+
+        selected_iteration, iteration_options = interations_dropdown(False, False)
+
+        selected_index = iteration_options.index(selected_iteration)
+        sheet_id = st.secrets["iteration"][f"{selected_index}"]["reranking_sheet_id"]
+        data = get_google_sheets_data(sheet_id)
+
+        st.markdown("---")
+
+        st.subheader("Book Reranking")
+        st.write("This graph shows how our opinion of books change. The left axis shows our ranking of books based on our scores. The right axis shows how we ranked books after reconsidering them after having read them all.")
+
+        # Check if dataframe is empty before creating slope graph
+        if data.empty:
+            st.info("No reranking data available for the selected iteration.")
+        else:
+            # Keep only specific columns (adjust column names as needed)
+            columns_to_keep = ['Book', 'Original ranking', 'Reranked ranking']  # Add your desired columns here
+            df = data[columns_to_keep]
+            print_dataframe_as_slope_graph(df)
 
 else:
     st.error("🚫 Access denied.")
