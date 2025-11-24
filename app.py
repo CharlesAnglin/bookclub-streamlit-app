@@ -316,6 +316,58 @@ def create_page_count_vs_score_scatter(dataframe):
     
     st.pyplot(plt)
 
+def create_publication_year_vs_score_scatter(dataframe):
+    """Create a scatter plot of publication year vs book score with book annotations."""
+    # Check if required columns exist
+    required_cols = ['Publication Year', 'Average Score', 'Book']
+    missing_cols = [col for col in required_cols if col not in dataframe.columns]
+    
+    if missing_cols:
+        st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+        st.info(f"Available columns: {', '.join(dataframe.columns)}")
+        return
+    
+    # Remove rows with missing data in required columns
+    plot_data = dataframe[required_cols].dropna()
+    
+    if plot_data.empty:
+        st.info("📊 No valid data found for scatter plot.")
+        return
+    
+    # Create the scatter plot
+    plt.figure(figsize=(12, 8))
+    
+    # Plot points
+    plt.scatter(plot_data['Publication Year'], plot_data['Average Score'], 
+               alpha=0.7, s=80, c='darkorange', edgecolors='darkred', linewidth=1)
+    
+    # Add book titles as annotations
+    for i, row in plot_data.iterrows():
+        book_title = row['Book']
+        # Truncate long titles for readability
+        if len(book_title) > 25:
+            book_title = book_title[:22] + "..."
+        
+        plt.annotate(book_title, 
+                    (row['Publication Year'], row['Average Score']),
+                    xytext=(8, 8), textcoords='offset points',
+                    fontsize=9, alpha=0.8,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcyan', 
+                             alpha=0.7, edgecolor='gray'),
+                    ha='left')
+    
+    # Customize the plot
+    plt.xlabel('Publication Year', fontsize=12, fontweight='bold')
+    plt.ylabel('Average Score', fontsize=12, fontweight='bold')
+    plt.title('Book Score vs Publication Year', fontsize=14, fontweight='bold', pad=20)
+    plt.grid(True, alpha=0.3)
+    
+    # Add some padding to prevent labels from being cut off
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.95, top=0.9)
+    
+    st.pyplot(plt)
+
 def interations_dropdown(include_all_years=True, default_to_most_recent=True):
     # Create iteration options based on the secret
     num_iterations = len(st.secrets["iteration"])
@@ -363,7 +415,7 @@ if token == st.secrets["token"]:
     # Add three mutually exclusive buttons
     view_option = st.radio(
         "Select view:",
-        options=["Score Table", "Score Distribution", "Reranking", "Page Length"],
+        options=["Score Table", "Score Distribution", "Reranking", "Page Length", "Publication Year"],
         index=0,  # "Scores" selected by default
         horizontal=True
     )
@@ -394,7 +446,7 @@ if token == st.secrets["token"]:
         st.subheader("Score Table")
         st.write("Click on the table headers to sort. Tap the fullscreen icon in the top right to expand table. If viewing on a smartphone it may help to turn your phone to landscape mode.")
 
-        only_score_data = data.drop(columns=['Page Count'], errors='ignore')
+        only_score_data = data.drop(columns=['Page Count', 'Publication Year'], errors='ignore')
 
         style_and_print_dataframe_as_table(only_score_data)
 
@@ -428,7 +480,7 @@ if token == st.secrets["token"]:
         st.subheader("Score Distribution")
         st.write("This graph shows the distribution of scores across different bookclub members.")
 
-        only_score_data = data.drop(columns=['Page Count'], errors='ignore')
+        only_score_data = data.drop(columns=['Page Count', 'Publication Year'], errors='ignore')
 
         create_facet_grid_with_stats(only_score_data)
 
@@ -480,6 +532,33 @@ if token == st.secrets["token"]:
         st.write("This scatter plot shows the relationship between the page count of books and their average score. Each point represents a book, annotated with its title.")
 
         create_page_count_vs_score_scatter(data)
+
+    if view_option == "Publication Year":
+        
+        selected_iteration, iteration_options = interations_dropdown(default_to_most_recent=False)
+
+        if selected_iteration == "All years":
+            # Fetch data from all iterations and combine them using pandas
+            all_dataframes = []
+            for i in range(len(st.secrets["iteration"])):
+                sheet_id = st.secrets["iteration"][f"{i}"]["scoring_sheet_id"]
+                df_temp = get_google_sheets_data(sheet_id)
+                all_dataframes.append(df_temp)
+            
+            # Combine all dataframes into one
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            data = combined_df
+        else:
+            selected_index = iteration_options.index(selected_iteration)
+            sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["scoring_sheet_id"]
+            data = get_google_sheets_data(sheet_id)
+
+        st.markdown("---")
+
+        st.subheader("Publication Year vs Book Score")
+        st.write("This scatter plot shows the relationship between the Publication Year of books and their average score. Each point represents a book, annotated with its title.")
+
+        create_publication_year_vs_score_scatter(data)
 
 else:
     st.error("🚫 Access denied.")
