@@ -6,8 +6,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 #TODO: interation 2 reranking data
-#TODO: standard deviation per book (which ones were most divisive)
-#TODO: score vs publication year
+#TODO: graph colour scale isn't consistent between columns. An 8 is greener in some columns compared to others.
+#TODO: make standard deviation coloured in red?
 #TODO: genres analysis
 
 # Make the dataframe take up the full width with wider layout
@@ -226,8 +226,8 @@ def create_facet_grid_with_stats(dataframe):
 
 def create_styled_summary_table(dataframe):
     """Create a styled summary statistics table for member scores."""
-    # Remove first 4 columns
-    df_analysis = dataframe.iloc[:, 4:].copy()
+    # Remove first 5 columns
+    df_analysis = dataframe.iloc[:, 5:].copy()
     
     # Melt the dataframe to create long format
     df_melted = pd.melt(df_analysis.reset_index(), 
@@ -242,9 +242,9 @@ def create_styled_summary_table(dataframe):
     if df_melted.empty:
         st.info("📊 No valid scores found for summary table.")
         return
-    
-    # Preserve the original column order from the dataframe (after removing first 4 columns)
-    original_member_order = dataframe.columns[4:].tolist()
+
+    # Preserve the original column order from the dataframe (after removing first 5 columns)
+    original_member_order = dataframe.columns[5:].tolist()
     
     # Create summary stats with preserved order
     summary_stats = df_melted.groupby('Member')['Score'].agg(['mean', 'std', 'min', 'max']).round(2)
