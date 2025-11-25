@@ -6,8 +6,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 #TODO: interation 2 reranking data
-#TODO: graph colour scale isn't consistent between columns. An 8 is greener in some columns compared to others.
-#TODO: make standard deviation coloured in red?
 #TODO: genres analysis
 
 # Make the dataframe take up the full width with wider layout
@@ -57,10 +55,31 @@ def style_and_print_dataframe_as_table(dataframe):
         if len(numeric_cols) > 0:
             styled_df = styled_df.format({col: lambda x: f"{x:g}" if pd.notna(x) else "" for col in numeric_cols})
         
-        cm = sns.light_palette("green", as_cmap=True)
-        # Can't get this to look pretty but the below allows more control:
-        # cm = sns.diverging_palette(121, 10, l=77, s=30, as_cmap=True)
-        styled_df = styled_df.background_gradient(cmap=cm, subset=df.columns[3:], high=0.4)
+        # Create color maps
+        green_cm = sns.light_palette("green", as_cmap=True)
+        red_cm = sns.light_palette("red", as_cmap=True)
+        
+        # Apply green gradient to Average Score and member columns (columns 5+)
+        green_columns = []
+        if 'Average Score' in df.columns:
+            green_columns.append('Average Score')
+        if len(df.columns) > 5:
+            green_columns.extend(df.columns[5:].tolist())
+        
+        if green_columns:
+            styled_df = styled_df.background_gradient(
+                cmap=green_cm, 
+                subset=green_columns,
+                vmin=1, 
+                vmax=9,
+                high=0.1)
+        
+        # Apply red gradient to Standard Deviation column
+        if 'Standard Deviation' in df.columns:
+            styled_df = styled_df.background_gradient(
+                cmap=red_cm,
+                subset=['Standard Deviation'],
+                high=0.2)
 
         st.dataframe(styled_df,
                     hide_index=True,
@@ -164,8 +183,8 @@ def print_dataframe_as_slope_graph(dataframe):
 
 def create_facet_grid_with_stats(dataframe):
     """Create a seaborn ridge plot from the dataframe after removing first 4 columns."""    
-    # Remove first 4 columns
-    df_analysis = dataframe.iloc[:, 4:].copy()
+    # Remove first 5 columns
+    df_analysis = dataframe.iloc[:, 5:].copy()
     
     # Melt the dataframe to create long format for FacetGrid
     df_melted = pd.melt(df_analysis.reset_index(), 
@@ -256,9 +275,9 @@ def create_styled_summary_table(dataframe):
     summary_stats = summary_stats.reindex(original_member_order)
     
     # Apply styling similar to the Raw Scores dataframe
-    cm = sns.light_palette("green", as_cmap=True)
-    styled_summary = summary_stats.style.background_gradient(cmap=cm, high=0.4)
-    
+    green_cm = sns.light_palette("green", as_cmap=True)
+    styled_summary = summary_stats.style.background_gradient(cmap=green_cm, high=0.4)
+
     # Format to 2 decimal places like the Raw Scores table
     styled_summary = styled_summary.format("{:.2f}")
     
