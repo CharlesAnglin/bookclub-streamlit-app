@@ -387,6 +387,141 @@ def create_publication_year_vs_score_scatter(dataframe):
     
     st.pyplot(plt)
 
+def create_genre_analysis(dataframe):
+    """Create genre analysis showing most common genres and their average scores."""
+    # Check if required columns exist
+    required_cols = ['Book', 'Average Score', 'Genres']
+    missing_cols = [col for col in required_cols if col not in dataframe.columns]
+    
+    if missing_cols:
+        st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+        st.info(f"Available columns: {', '.join(dataframe.columns)}")
+        return
+    
+    # Remove rows with missing data in required columns
+    analysis_data = dataframe[required_cols].dropna()
+    
+    if analysis_data.empty:
+        st.info("📊 No valid genre data found for analysis.")
+        return
+    
+    # Split genres and create a list of all individual genres
+    all_genres = []
+    genre_scores = []
+    
+    for _, row in analysis_data.iterrows():
+        genres = [genre.strip().lower() for genre in str(row['Genres']).split(',')]
+        book_score = row['Average Score']
+        
+        for genre in genres:
+            if genre and genre != 'nan':  # Skip empty or NaN genres
+                all_genres.append(genre.title())  # Capitalize first letter
+                genre_scores.append(book_score)
+    
+    if not all_genres:
+        st.info("📊 No valid genres found in the data.")
+        return
+    
+    # Create DataFrame for analysis
+    genre_df = pd.DataFrame({
+        'Genre': all_genres,
+        'Score': genre_scores
+    })
+    
+    # Calculate statistics per genre
+    genre_stats = genre_df.groupby('Genre').agg({
+        'Score': ['mean', 'count']
+    }).round(2)
+    
+    # Flatten column names
+    genre_stats.columns = ['Average Score', 'Book Count']
+    genre_stats = genre_stats.reset_index()
+    
+    # Calculate total number of unique books for percentage calculation
+    total_books = len(analysis_data)
+    
+    # Add percentage column
+    genre_stats['Percentage'] = (genre_stats['Book Count'] / total_books * 100).round(1)
+    
+    # Sort by book count (most common first)
+    genre_stats = genre_stats.sort_values('Book Count', ascending=False)
+    
+    # Style the table with conditional formatting
+    styled_genre_table = genre_stats.style.background_gradient(
+        subset=['Average Score'], 
+        cmap=sns.light_palette("green", as_cmap=True), 
+        high=0.3
+    ).background_gradient(
+        subset=['Book Count'], 
+        cmap=sns.light_palette("blue", as_cmap=True), 
+        high=0.3
+    ).background_gradient(
+        subset=['Percentage'], 
+        cmap=sns.light_palette("orange", as_cmap=True), 
+        high=0.3
+    ).format({
+        'Average Score': "{:.2f}",
+        'Book Count': "{:.0f}",
+        'Percentage': "{:.1f}%"
+    })
+    
+    st.dataframe(styled_genre_table, hide_index=True, height=500)
+
+def create_host_analysis(dataframe):
+    """Create a bar chart showing average of average scores per host."""
+    # Check if required columns exist
+    required_cols = ['Host', 'Average Score']
+    missing_cols = [col for col in required_cols if col not in dataframe.columns]
+    
+    if missing_cols:
+        st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+        st.info(f"Available columns: {', '.join(dataframe.columns)}")
+        return
+    
+    # Remove rows with missing data in required columns
+    analysis_data = dataframe[required_cols].dropna()
+    
+    if analysis_data.empty:
+        st.info("📊 No valid host data found for analysis.")
+        return
+    
+    # Calculate average of average scores per host
+    host_stats = analysis_data.groupby('Host')['Average Score'].agg(['mean', 'count']).reset_index()
+    host_stats.columns = ['Host', 'Average of Average Scores', 'Book Count']
+    host_stats = host_stats.round(2)
+    
+    # Sort by average score (descending)
+    host_stats = host_stats.sort_values('Average of Average Scores', ascending=False)
+    
+    # Create the bar chart
+    plt.figure(figsize=(12, 6))
+    
+    # Create bars with color gradient based on score
+    colors = plt.cm.RdYlGn([score/10 for score in host_stats['Average of Average Scores']])
+    
+    bars = plt.bar(host_stats['Host'], host_stats['Average of Average Scores'], 
+                   color=colors, edgecolor='darkgray', linewidth=1.5, alpha=0.8)
+    
+    # Add value labels on top of each bar
+    for i, (bar, value, count) in enumerate(zip(bars, host_stats['Average of Average Scores'], host_stats['Book Count'])):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height,
+                f'{value:.2f}\n({int(count)} books)',
+                ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    # Customize the plot
+    plt.xlabel('Bookclub Member', fontsize=12, fontweight='bold')
+    plt.ylabel('Average Book Score by Host', fontsize=12, fontweight='bold')
+    plt.title('Average Book Score by Host', fontsize=14, fontweight='bold', pad=20)
+    plt.xticks(rotation=45, ha='right')
+    plt.grid(True, alpha=0.3, axis='y')
+    plt.ylim(0, max(host_stats['Average of Average Scores']) * 1.15)  # Add 15% padding at top
+    
+    # Add some padding to prevent labels from being cut off
+    plt.tight_layout()
+    
+    st.pyplot(plt)
+
 def interations_dropdown(include_all_years=True, default_to_most_recent=True):
     # Create iteration options based on the secret
     num_iterations = len(st.secrets["iteration"])
@@ -434,7 +569,7 @@ if token == st.secrets["token"]:
     # Add three mutually exclusive buttons
     view_option = st.radio(
         "Select view:",
-        options=["Score Table", "Score Distribution", "Reranking", "Page Length", "Publication Year"],
+        options=["Score Table", "Score Distribution", "Reranking", "Page Length", "Publication Year", "Genres", "Book Pick Analysis"],
         index=0,  # "Scores" selected by default
         horizontal=True
     )
@@ -578,6 +713,60 @@ if token == st.secrets["token"]:
         st.write("This scatter plot shows the relationship between the Publication Year of books and their average score. Each point represents a book, annotated with its title.")
 
         create_publication_year_vs_score_scatter(data)
+
+    if view_option == "Genres":
+        
+        selected_iteration, iteration_options = interations_dropdown(default_to_most_recent=False)
+
+        if selected_iteration == "All years":
+            # Fetch data from all iterations and combine them using pandas
+            all_dataframes = []
+            for i in range(len(st.secrets["iteration"])):
+                sheet_id = st.secrets["iteration"][f"{i}"]["scoring_sheet_id"]
+                df_temp = get_google_sheets_data(sheet_id)
+                all_dataframes.append(df_temp)
+            
+            # Combine all dataframes into one
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            data = combined_df
+        else:
+            selected_index = iteration_options.index(selected_iteration)
+            sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["scoring_sheet_id"]
+            data = get_google_sheets_data(sheet_id)
+
+        st.markdown("---")
+
+        st.subheader("Genre Analysis")
+        st.write("This table shows the genres of books, how commonly their picked, and their average scores.")
+
+        create_genre_analysis(data)
+
+    if view_option == "Book Pick Analysis":
+        
+        selected_iteration, iteration_options = interations_dropdown(default_to_most_recent=False)
+
+        if selected_iteration == "All years":
+            # Fetch data from all iterations and combine them using pandas
+            all_dataframes = []
+            for i in range(len(st.secrets["iteration"])):
+                sheet_id = st.secrets["iteration"][f"{i}"]["scoring_sheet_id"]
+                df_temp = get_google_sheets_data(sheet_id)
+                all_dataframes.append(df_temp)
+            
+            # Combine all dataframes into one
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            data = combined_df
+        else:
+            selected_index = iteration_options.index(selected_iteration)
+            sheet_id = st.secrets["iteration"][f"{selected_index - 1}"]["scoring_sheet_id"]
+            data = get_google_sheets_data(sheet_id)
+
+        st.markdown("---")
+
+        st.subheader("Book Pick Analysis")
+        st.write("This graph shows the average book score for each bookclub member. The number in parentheses indicates how many books each member selected.")
+
+        create_host_analysis(data)
 
 else:
     st.error("🚫 Access denied.")
