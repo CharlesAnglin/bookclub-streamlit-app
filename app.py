@@ -511,8 +511,8 @@ def create_host_analysis(dataframe):
     
     # Customize the plot
     plt.xlabel('Bookclub Member', fontsize=12, fontweight='bold')
-    plt.ylabel('Average Book Score by Host', fontsize=12, fontweight='bold')
-    plt.title('Average Book Score by Host', fontsize=14, fontweight='bold', pad=20)
+    plt.ylabel('Average Book Score by Member', fontsize=12, fontweight='bold')
+    plt.title('Average Book Score by Member', fontsize=14, fontweight='bold', pad=20)
     plt.xticks(rotation=45, ha='right')
     plt.grid(True, alpha=0.3, axis='y')
     plt.ylim(0, max(host_stats['Average of Average Scores']) * 1.15)  # Add 15% padding at top
@@ -569,8 +569,8 @@ if token == st.secrets["token"]:
     # Add three mutually exclusive buttons
     view_option = st.radio(
         "Select view:",
-        options=["Score Table", "Score Distribution", "Reranking", "Page Length", "Publication Year", "Genres", "Book Pick Analysis"],
-        index=0,  # "Scores" selected by default
+        options=["Score Table", "Score Distribution", "Reranking", "Page Length", "Publication Year", "Genres", "Average Book Score"],
+        index=0,  # "Scores" selected by defaultgit 
         horizontal=True
     )
 
@@ -741,7 +741,7 @@ if token == st.secrets["token"]:
 
         create_genre_analysis(data)
 
-    if view_option == "Book Pick Analysis":
+    if view_option == "Average Book Score":
         
         selected_iteration, iteration_options = interations_dropdown(default_to_most_recent=False)
 
@@ -763,7 +763,7 @@ if token == st.secrets["token"]:
 
         st.markdown("---")
 
-        st.subheader("Book Pick Analysis")
+        st.subheader("Average Book Score")
         st.write("This graph shows the average book score for each bookclub member. The number in parentheses indicates how many books each member selected.")
 
         create_host_analysis(data)
