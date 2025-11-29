@@ -600,7 +600,7 @@ if token == st.secrets["token"]:
         st.subheader("Score Table")
         st.write("Click on the table headers to sort. Tap the fullscreen icon in the top right to expand table. If viewing on a smartphone it may help to turn your phone to landscape mode.")
 
-        only_score_data = data.drop(columns=['Page Count', 'Publication Year'], errors='ignore')
+        only_score_data = data.drop(columns=['Genres', 'Page Count', 'Publication Year'], errors='ignore')
 
         style_and_print_dataframe_as_table(only_score_data)
 
@@ -634,7 +634,7 @@ if token == st.secrets["token"]:
         st.subheader("Score Distribution")
         st.write("This graph shows the distribution of scores across different bookclub members.")
 
-        only_score_data = data.drop(columns=['Page Count', 'Publication Year'], errors='ignore')
+        only_score_data = data.drop(columns=['Genres', 'Page Count', 'Publication Year'], errors='ignore')
 
         create_facet_grid_with_stats(only_score_data)
 
@@ -737,7 +737,7 @@ if token == st.secrets["token"]:
         st.markdown("---")
 
         st.subheader("Genre Analysis")
-        st.write("This table shows the genres of books, how commonly their picked, and their average scores.")
+        st.write("This table shows the genres of books we've picked, how commonly each genre is picked, and their average scores.")
 
         create_genre_analysis(data)
 
@@ -764,7 +764,7 @@ if token == st.secrets["token"]:
         st.markdown("---")
 
         st.subheader("Average Book Score")
-        st.write("This graph shows the average book score for each bookclub member. The number in parentheses indicates how many books each member selected.")
+        st.write("This graph shows the average book score for each bookclub member. The number in brackets indicates how many books each member has selected.")
 
         create_host_analysis(data)
 
