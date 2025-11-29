@@ -446,6 +446,11 @@ def create_genre_analysis(dataframe):
     # Sort by book count (most common first)
     genre_stats = genre_stats.sort_values('Book Count', ascending=False)
     
+    # Return genre_stats for use in scatter plot and table display
+    return genre_stats
+
+def display_genre_table(genre_stats):
+    """Display styled genre statistics table."""
     # Style the table with conditional formatting
     styled_genre_table = genre_stats.style.background_gradient(
         subset=['Average Score'], 
@@ -466,6 +471,58 @@ def create_genre_analysis(dataframe):
     })
     
     st.dataframe(styled_genre_table, hide_index=True, height=500)
+
+def create_genre_scatter_plot(genre_stats):
+    """Create a scatter plot of genre average score vs book count."""
+    if genre_stats is None or genre_stats.empty:
+        st.info("📊 No genre data available for scatter plot.")
+        return
+    
+    # Create the scatter plot
+    plt.figure(figsize=(12, 8))
+    
+    # Calculate overall average score (weighted by book count)
+    total_score_sum = (genre_stats['Average Score'] * genre_stats['Book Count']).sum()
+    total_book_count = genre_stats['Book Count'].sum()
+    overall_average = total_score_sum / total_book_count
+    
+    # Plot horizontal line for overall average
+    plt.axhline(y=overall_average, color='red', linestyle='--', linewidth=2, 
+                alpha=0.6, label=f'Overall Average: {overall_average:.2f}')
+    
+    # Plot points with color gradient based on score
+    colors = plt.cm.RdYlGn([score/10 for score in genre_stats['Average Score']])
+    
+    plt.scatter(genre_stats['Book Count'], genre_stats['Average Score'], 
+               alpha=0.7, s=150, c=colors, edgecolors='darkgray', linewidth=1.5)
+    
+    # Add genre labels as annotations
+    for i, row in genre_stats.iterrows():
+        genre_name = row['Genre']
+        # Truncate long genre names for readability
+        if len(genre_name) > 20:
+            genre_name = genre_name[:17] + "..."
+        
+        plt.annotate(genre_name, 
+                    (row['Book Count'], row['Average Score']),
+                    xytext=(8, 8), textcoords='offset points',
+                    fontsize=9, alpha=0.8,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', 
+                             alpha=0.7, edgecolor='gray'),
+                    ha='left')
+    
+    # Customize the plot
+    plt.xlabel('Number of Books Picked', fontsize=12, fontweight='bold')
+    plt.ylabel('Average Score', fontsize=12, fontweight='bold')
+    plt.title('Genre Performance: Average Score vs Popularity', fontsize=14, fontweight='bold', pad=20)
+    plt.grid(True, alpha=0.3)
+    plt.legend(loc='best', fontsize=10)
+    
+    # Add some padding to prevent labels from being cut off
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.95, top=0.9)
+    
+    st.pyplot(plt)
 
 def create_host_analysis(dataframe):
     """Create a bar chart showing average of average scores per host."""
@@ -736,10 +793,16 @@ if token == st.secrets["token"]:
 
         st.markdown("---")
 
-        st.subheader("Genre Analysis")
-        st.write("This table shows the genres of books we've picked, how commonly each genre is picked, and their average scores.")
-
-        create_genre_analysis(data)
+        genre_stats = create_genre_analysis(data)
+        
+        if genre_stats is not None:
+            st.subheader("Genre Scatter Plot")
+            st.write("This scatter plot visualizes the relationship between how often a genre is picked and its average score.")
+            create_genre_scatter_plot(genre_stats)
+            
+            st.subheader("Genre Analysis Table")
+            st.write("This table shows the genres of books we've picked, how commonly each genre is picked, and their average scores.")
+            display_genre_table(genre_stats)
 
     if view_option == "Average Book Score":
         
